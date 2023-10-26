@@ -15,4 +15,7 @@ struct arguments {
 
 extern struct arguments arguments;
 
+// globals
+extern size_t g_system_pagesize;
+
 #endif  // _SMOG_METER_H
