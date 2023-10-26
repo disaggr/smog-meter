@@ -7,13 +7,23 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "./util.h"
 #include "./smog-meter.h"
 
-int parse_vmas(FILE *f, struct vma **buf, size_t *len) {
-    struct vma *vmas = NULL;
-    size_t num_vmas = 0;
+int update_vmas(const char *path, struct vma **buf, size_t *len) {
+    // parse all VMAs from /proc/<pid>/maps
+    struct vma *vmas = *buf;
+    size_t num_vmas = *len;
+    size_t i = 0;
+
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "%s: ", path);
+        perror("fopen");
+        return 1;
+    }
 
     char buffer[4096];
     int lines_read = 0;
@@ -34,82 +44,135 @@ int parse_vmas(FILE *f, struct vma **buf, size_t *len) {
                        &major, &minor,
                        &ino);
         if (n < 10) {
-            fprintf(stderr, "unexpected line: \"%s\"\n", buffer);
+            fprintf(stderr, "%s:%d: unexpected line: \"%s\"\n", path, lines_read, buffer);
             return 1;
         }
 
         struct vma vma = {
             vm_start / g_system_pagesize,
             vm_end / g_system_pagesize,
+            0, 0,
         };
 
-        vmas = realloc(vmas, sizeof(*vmas) * (num_vmas + 1));
-        if (!vmas) {
-            perror("realloc");
-            return 2;
-        }
-        vmas[num_vmas] = vma;
-        num_vmas++;
-    }
-
-    if (arguments.verbose) {
-        printf("\n");
-        printf("Parsed %zu VMAs:\n", num_vmas);
-        printf("\n");
-
-        size_t total_reserved = 0;
-        for (size_t i = 0; i < num_vmas; ++i) {
-            total_reserved += vmas[i].end - vmas[i].start;
-            printf("  #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
-                   i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                   format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
-        }
-    }
-
-    // collapse VMAs into consecutive regions of virtual memory
-    struct vma *big_vmas = NULL;
-    size_t num_big_vmas = 0;
-
-    for (size_t i = 0; i < num_vmas; ++i) {
-        if (num_big_vmas > 0 && vmas[i].start == big_vmas[num_big_vmas - 1].end) {
-            big_vmas[num_big_vmas - 1].end = vmas[i].end;
+        if (vma.end - vma.start < arguments.min_vma_size)
             continue;
-        }
 
-        big_vmas = realloc(big_vmas, sizeof(*big_vmas) * (num_big_vmas + 1));
-        if (!big_vmas) {
-            perror("realloc");
-            return 2;
+        if (i >= num_vmas) {
+            // add to the end, probably only used in first pass
+            vmas = realloc(vmas, sizeof(*vmas) * (num_vmas + 1));
+            if (!vmas) {
+                perror("realloc");
+                return 2;
+            }
+            vmas[i] = vma;
+            if (arguments.verbose) {
+                printf("  new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                       i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+            }
+            num_vmas++;
+            i++;
+        } else if (vmas[i].start == vma.start) {
+            // we have seen this one before, update end if necessary
+            if (vmas[i].end != vma.end) {
+                vmas[i].end = vma.end;
+                if (arguments.verbose) {
+                    printf("  updated VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                           i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+                           format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                }
+            }
+            i++;
+        } else if (vmas[i].start > vma.start) {
+            // this is a new insert
+            vmas = realloc(vmas, sizeof(*vmas) * (num_vmas + 1));
+            if (!vmas) {
+                perror("realloc");
+                return 2;
+            }
+            memmove(vmas + i + 1, vmas + i, sizeof(*vmas) * num_vmas - i);
+            vmas[i] = vma;
+            if (arguments.verbose) {
+                printf("  new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                       i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+            }
+            num_vmas++;
+            i++;
+        } else {
+            // we lost one?
+            if (arguments.verbose) {
+                printf("  lost VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                       i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+            }
+            memmove(vmas + i, vmas + i + 1, sizeof(*vmas) * num_vmas - i - 1);
+            num_vmas--;
         }
-        big_vmas[num_big_vmas] = vmas[i];
-        num_big_vmas++;
     }
 
-    free(vmas);
-    vmas = big_vmas;
-    num_vmas = num_big_vmas;
+    fclose(f);
 
-    if (arguments.verbose) {
-        printf("\n");
-        printf("Aggregated into %zu consecutive regions:\n", num_vmas);
-        printf("\n");
+    // // collapse VMAs into consecutive regions of virtual memory
+    // struct vma *big_vmas = NULL;
+    // size_t num_big_vmas = 0;
 
-        size_t total_reserved = 0;
-        for (size_t i = 0; i < num_vmas; ++i) {
-            total_reserved += vmas[i].end - vmas[i].start;
-            printf("  #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
-                   i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                   format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
-        }
+    // for (size_t i = 0; i < num_vmas; ++i) {
+    //     if (num_big_vmas > 0 && vmas[i].start == big_vmas[num_big_vmas - 1].end) {
+    //         big_vmas[num_big_vmas - 1].end = vmas[i].end;
+    //         continue;
+    //     }
 
-        printf("\n");
-        printf("Total Reserved: %zu Pages, %s\n",
-               total_reserved,
-               format_size_string(total_reserved * g_system_pagesize));
-    }
+    //     big_vmas = realloc(big_vmas, sizeof(*big_vmas) * (num_big_vmas + 1));
+    //     if (!big_vmas) {
+    //         perror("realloc");
+    //         return 2;
+    //     }
+    //     big_vmas[num_big_vmas] = vmas[i];
+    //     num_big_vmas++;
+    // }
+
+    // free(vmas);
+    // vmas = big_vmas;
+    // num_vmas = num_big_vmas;
+
+    // if (arguments.verbose) {
+    //     printf("\n");
+    //     printf("Aggregated into %zu consecutive regions:\n", num_vmas);
+    //     printf("\n");
+
+    //     size_t total_reserved = 0;
+    //     for (size_t i = 0; i < num_vmas; ++i) {
+    //         total_reserved += vmas[i].end - vmas[i].start;
+    //         printf("  #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+    //                i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+    //                format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+    //     }
+
+    //     printf("\n");
+    //     printf("Total Reserved: %zu Pages, %s\n",
+    //            total_reserved,
+    //            format_size_string(total_reserved * g_system_pagesize));
+    // }
 
     *buf = vmas;
     *len = num_vmas;
+
+    // if (arguments.verbose) {
+    //     printf("\n");
+    //     printf("Parsed %zu VMAs from %s:\n", num_vmas, path);
+    //     printf("\n");
+
+    //     size_t total_reserved = 0;
+    //     for (size_t i = 0; i < num_vmas; ++i) {
+    //         total_reserved += vmas[i].end - vmas[i].start;
+    //         printf("  #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+    //                i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
+    //                format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+    //     }
+    // } else {
+    //     printf("Parsed %zu VMAs from %s\n", num_vmas, path);
+    // }
 
     return 0;
 }
@@ -130,6 +193,7 @@ int clear_softdirty(const char *path) {
         return 1;
     }
 
+    close(fd);
     return 0;
 }
 

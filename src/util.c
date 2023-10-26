@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
+#include <ctype.h>
 
 char *format_size_string(size_t s) {
     static char *buffer = NULL;
@@ -55,4 +57,48 @@ char *makestr(const char *format, ...) {
     va_end(ap);
 
     return buf;
+}
+
+int parse_smaps(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "%s: ", path);
+        perror("fopen");
+        return 1;
+    }
+
+    int uses_hugepages = 0;
+
+    char buffer[4096];
+    int lines_read = 0;
+    while (fgets(buffer, sizeof(buffer), f) != NULL) {
+        lines_read++;
+
+        char key[512];
+        size_t value;
+
+        int n = sscanf(buffer, "%s %zu", key, &value);
+        if (n < 2)
+            continue;
+
+        for (size_t i = 0; i < strlen(key); ++i) {
+            key[i] = tolower(key[i]);
+        }
+
+        if (!strstr(key, "huge"))
+            continue;
+
+        if (value > 0) {
+            uses_hugepages = 1;
+            break;
+        }
+    }
+
+    fclose(f);
+
+    if (uses_hugepages) {
+        fprintf(stderr, "warning: hugepages detected in VMA. measurements will be inaccurate!\n");
+    }
+
+    return 0;
 }
