@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
 
         if (arguments.verbose) {
             for (size_t i = 0; i < num_vmas; ++i) {
-                if (vmas[i].softdirty > 0) 
+                if (vmas[i].softdirty > 0)
                     printf("  VMA #%zu: R %zu, C %zu, D %zu (%.2f%%)\n", i,
                            vmas[i].end - vmas[i].start,
                            vmas[i].committed,

@@ -1,5 +1,6 @@
 # binaries
 smog-meter
+fuzzer
 *.o
 
 # autoconf generated files
