@@ -1,0 +1,28 @@
+
+Definition of the tracing output format:
+
+smog-meter will produce one tracing record every measurement interval. the
+tracing record header will consist of the following data:
+
+4 Bytes	The unix timestamp seconds of the measurement
+4 Bytes	The unix timestamp microseconds of the measurement
+4 Bytes The number of VMAs contained in the record
+
+Following this information, there are a number of VMA records equal to the
+number of VMAs encoded in the record header. Each VMA record header contains
+the following information:
+	
+8 Bytes	The start address of the VMA
+8 Bytes The end address of the VMA
+4 Bytes The number of pages in the VMA
+
+Following this information, the page data of the VMA is encoded. Each page is
+encoded with two bits, the lower bit indicates whether the page is present in
+physical RAM, the higher bit encodes whether the page is dirty. The page
+records are encoded in least-significant-bit first, little endian 4-Byte
+integers.
+
+After the page data, the next VMA or tracing record starts aligned at a 4-Byte
+boundary.
+
+Also refer to read_trace.py for an implementation of this data format.
