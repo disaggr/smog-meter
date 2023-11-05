@@ -11,9 +11,14 @@
 
 struct arguments {
     pid_t pid;
-    uint64_t delay;
-    size_t min_vma_size;
     int verbose;
+    uint64_t delay;
+
+    size_t min_vma_reserved;
+    size_t min_vma_committed;
+    size_t min_vma_dirty;
+
+    char *tracefile;
 };
 
 extern struct arguments arguments;

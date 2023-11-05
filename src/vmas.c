@@ -54,9 +54,6 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             0, 0,
         };
 
-        if (vma.end - vma.start < arguments.min_vma_size)
-            continue;
-
         if (i >= num_vmas) {
             // add to the end, probably only used in first pass
             vmas = realloc(vmas, sizeof(*vmas) * (num_vmas + 1));
@@ -188,22 +185,6 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
 
     *buf = vmas;
     *len = num_vmas;
-
-    if (arguments.verbose) {
-        printf("\n");
-        printf("Parsed %zu VMAs from %s:\n", num_vmas, path);
-        printf("\n");
-
-        size_t total_reserved = 0;
-        for (size_t i = 0; i < num_vmas; ++i) {
-            total_reserved += vmas[i].end - vmas[i].start;
-            printf("  #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
-                   i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                   format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
-        }
-    } else {
-        printf("Parsed %zu VMAs from %s\n", num_vmas, path);
-    }
 
     return 0;
 }

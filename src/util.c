@@ -16,7 +16,7 @@ char *format_size_string(size_t s) {
     static const char *units[] = { "Bytes", "KiB", "MiB", "GiB" };
 
     int unit = 0;
-    while (unit < 4 && !(s % 1024)) {
+    while (unit < 4 && s && !(s % 1024)) {
         unit++;
         s /= 1024;
     }
