@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     // prepare tracefile
     int trace_fd = -1;
     if (arguments.tracefile) {
-        trace_fd = open(arguments.tracefile, O_CREAT | O_RDWR, 0644);
+        trace_fd = open(arguments.tracefile, O_CREAT | O_RDWR | O_TRUNC, 0644);
         if (trace_fd < 0) {
             fprintf(stderr, "%s: ", arguments.tracefile);
             perror("open");

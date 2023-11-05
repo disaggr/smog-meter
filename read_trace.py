@@ -11,7 +11,7 @@ def main(args):
         buffer = t.read()
 
     ptr = 0
-    while True:
+    while ptr < len(buffer):
         sec, usec = struct.unpack_from("<LL", buffer, ptr)
         ptr += 8
 
@@ -40,8 +40,8 @@ def main(args):
             p = [ Page((e >> j) & 0x1, (e >> (j+1)) & 0x1) for e in a for j in range(0, 32, 2) ]
             p = p[:pages]
 
-            print(f"  {a}")
-            print(f"  {p}")
+            #print(f"  {a}")
+            #print(f"  {p}")
 
 if __name__ == "__main__":
     main(sys.argv)
