@@ -14,10 +14,14 @@ static const char args_doc[] = "PID";
 static struct argp_option options[] = {
     { "monitor-interval", 'M', "INTERVAL", 0,
       "monitor and reporting interval in milliseconds", 0 },
+    { "track-accessed", 'T', 0, 0,
+      "also track the access bits for all pages (expensive)", 0},
     { "min-vma-reserved", 'r', "PAGES", 0,
       "the minimum reserved pages of a VMA to be reported", 1 },
     { "min-vma-committed", 'c', "PAGES", 0,
       "the minimum committed pages of a VMA to be reported", 1 },
+    { "min-vma-accessed", 'a', "PAGES", 0,
+      "the minimum dirty pages of a VMA to be reported", 1 },
     { "min-vma-dirty", 'd', "PAGES", 0,
       "the minimum dirty pages of a VMA to be reported", 1 },
     { "tracefile", 't', "FILE", 0,
@@ -38,6 +42,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 argp_failure(state, 1, errno, "invalid interval: %s", arg);
             arguments->delay = millis;
             break;
+        case 'T':
+            arguments->track_accessed = 1;
+            break;
         case 'r':
             errno = 0;
             arguments->min_vma_reserved = strtoll(arg, NULL, 0);
@@ -47,6 +54,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case 'c':
             errno = 0;
             arguments->min_vma_committed = strtoll(arg, NULL, 0);
+            if (errno != 0)
+                argp_failure(state, 1, errno, "invalid number: %s", arg);
+            break;
+        case 'a':
+            errno = 0;
+            arguments->min_vma_accessed = strtoll(arg, NULL, 0);
             if (errno != 0)
                 argp_failure(state, 1, errno, "invalid number: %s", arg);
             break;

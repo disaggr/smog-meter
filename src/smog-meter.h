@@ -13,9 +13,11 @@ struct arguments {
     pid_t pid;
     int verbose;
     uint64_t delay;
+    int track_accessed;
 
     size_t min_vma_reserved;
     size_t min_vma_committed;
+    size_t min_vma_accessed;
     size_t min_vma_dirty;
 
     char *tracefile;
@@ -25,5 +27,6 @@ extern struct arguments arguments;
 
 // globals
 extern size_t g_system_pagesize;
+extern size_t g_system_physical_pages;
 
 #endif  // SMOG_METER_H_

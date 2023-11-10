@@ -13,11 +13,16 @@ struct vma {
     size_t end;
 
     size_t committed;
+    size_t accessed;
     size_t softdirty;
+
+    char *pathname;
 };
 
 int update_vmas(const char *path, struct vma **buf, size_t *len);
 
 int clear_softdirty(const char *path);
+
+int clear_accessed(const char *path);
 
 #endif  // VMAS_H_

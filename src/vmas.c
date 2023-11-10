@@ -36,22 +36,31 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
         int major, minor;
         char r, w, x, s;
         size_t ino;
+        int length;
 
-        int n = sscanf(buffer, "%zx-%zx %c%c%c%c %zx %x:%x %lu",
+        int n = sscanf(buffer, "%zx-%zx %c%c%c%c %zx %x:%x %lu%n",
                        &vm_start, &vm_end,
                        &r, &w, &x, &s,
                        &pgoff,
                        &major, &minor,
-                       &ino);
+                       &ino,
+                       &length);
+
         if (n < 10) {
             fprintf(stderr, "%s:%d: unexpected line: \"%s\"\n", path, lines_read, buffer);
             return 1;
         }
 
+        char *name = buffer + length;
+        while (*name != 0 && *name == ' ')
+            name++;
+        name[strlen(name) - 1] = 0;
+
         struct vma vma = {
             vm_start / g_system_pagesize,
             vm_end / g_system_pagesize,
-            0, 0,
+            0, 0, 0,
+            strdup(name),
         };
 
         if (i >= num_vmas) {
@@ -63,9 +72,10 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             }
             vmas[i] = vma;
             if (arguments.verbose) {
-                printf("  appended new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                printf("  appended new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s) %s\n",
                        i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize),
+                       vmas[i].pathname);
             }
             num_vmas++;
             i++;
@@ -73,10 +83,13 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             // we have seen this one before, update end if necessary
             if (vmas[i].end != vma.end) {
                 vmas[i].end = vma.end;
+                free(vmas[i].pathname);
+                vmas[i].pathname = vma.pathname;
                 if (arguments.verbose) {
-                    printf("  updated VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                    printf("  updated VMA: #%zu: %#zx ... %#zx (%zu Pages, %s), %s\n",
                            i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                           format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                           format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize),
+                           vmas[i].pathname);
                 }
             }
             i++;
@@ -84,10 +97,13 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             // we also have seen this one before, update start if necessary
             if (vmas[i].start != vma.start) {
                 vmas[i].start = vma.start;
+                free(vmas[i].pathname);
+                vmas[i].pathname = vma.pathname;
                 if (arguments.verbose) {
-                    printf("  updated VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                    printf("  updated VMA: #%zu: %#zx ... %#zx (%zu Pages, %s), %s\n",
                            i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                           format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                           format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize),
+                           vmas[i].pathname);
                 }
             }
             i++;
@@ -101,18 +117,20 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             memmove(vmas + i + 1, vmas + i, sizeof(*vmas) * (num_vmas - i));
             vmas[i] = vma;
             if (arguments.verbose) {
-                printf("  inserted new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                printf("  inserted new VMA: #%zu: %#zx ... %#zx (%zu Pages, %s), %s\n",
                        i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize),
+                       vmas[i].pathname);
             }
             num_vmas++;
             i++;
         } else {
             // we lost one?
             if (arguments.verbose) {
-                printf("  lost VMA: #%zu: %#zx ... %#zx (%zu Pages, %s)\n",
+                printf("  lost VMA: #%zu: %#zx ... %#zx (%zu Pages, %s), %s\n",
                        i, vmas[i].start, vmas[i].end, vmas[i].end - vmas[i].start,
-                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize));
+                       format_size_string((vmas[i].end - vmas[i].start) * g_system_pagesize),
+                       vmas[i].pathname);
             }
             memmove(vmas + i, vmas + i + 1, sizeof(*vmas) * (num_vmas - i - 1));
             num_vmas--;
@@ -197,6 +215,26 @@ int clear_softdirty(const char *path) {
         return 1;
     }
     const char buf[] = "4";
+
+    int res = write(fd, buf, sizeof(buf));
+    if (res < 0) {
+        fprintf(stderr, "%s: ", path);
+        perror("write");
+        return 1;
+    }
+
+    close(fd);
+    return 0;
+}
+
+int clear_accessed(const char *path) {
+    int fd = open(path, O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "%s: ", path);
+        perror("open");
+        return 1;
+    }
+    const char buf[] = "1";
 
     int res = write(fd, buf, sizeof(buf));
     if (res < 0) {
