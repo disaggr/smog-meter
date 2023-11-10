@@ -427,13 +427,32 @@ int main(int argc, char* argv[]) {
                 uint32_t flags = 0;
                 size_t index = 0;
                 for (size_t j = 0; j < (size_t)len; ++j) {
-                    if (pagemap[j] & PM_PRESENT) {
-                        flags |= 1 << index++;
-                        flags |= ((pagemap[j] & PM_SOFT_DIRTY) != 0) << index++;
+                    // tracefile is encoded as:
+                    //   00 not present
+                    //   01 idle
+                    //   10 accessed
+                    //   11 softdirty
+                    //
+                    // this loses some information where pages are dirty but
+                    // not accessed, but given that these are caused by
+                    // imprecise measurements and time drifting, it's probalby
+                    // okay. still, as usual, here be dragons.
+                   
+                    int v;
+                    if (!(pagemap[j] & PM_PRESENT)) {
+                        v = 0x0;
+                    } else if (arguments.track_accessed && (pagemap[j] & PM_ACCESSED)
+                               && !(pagemap[j] & PM_SOFT_DIRTY)) {
+                        v = 0x2;
+                    } else if (pagemap[j] & PM_SOFT_DIRTY) {
+                        v = 0x3;
                     } else {
-                        index += 2;
+                        v = 0x1;
                     }
-                    
+
+                    flags |= v << index;
+                    index += 2;
+
                     if (index >= 32 || j == (size_t)len - 1) {
                         write4(trace_fd, &flags);
                         flags = 0;

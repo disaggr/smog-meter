@@ -17,3 +17,9 @@ configure~
 .dirstamp
 
 data/
+
+# smeg-meter generated files
+*.trace
+
+# reference material
+page-types
