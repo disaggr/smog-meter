@@ -11,7 +11,7 @@
 
 #include "./util.h"
 
-#define RECURSION_DELAY 1 // ms
+#define RECURSION_DELAY 1  // ms
 
 int phase1(size_t d) {
     printf("recursion depth is %zu\n", d);
@@ -21,14 +21,14 @@ int phase1(size_t d) {
     struct timespec delay = TIMESPEC_FROM_MILLIS(RECURSION_DELAY);
     nanosleep(&delay, NULL);
 
-    phase1(d + 1);    
+    phase1(d + 1);
 
     return 0;
 }
 
-#define MALLOC_DELAY 100 // ms
+#define MALLOC_DELAY 100  // ms
 #define MALLOC_BUFFERS 32
-#define MALLOC_MAX_SIZE 128 // 4th root(256MiB)
+#define MALLOC_MAX_SIZE 128  // 4th root(256MiB)
 
 int phase2() {
     void *buffers[MALLOC_BUFFERS] = { 0 };
@@ -45,7 +45,7 @@ int phase2() {
         s += 1;
         s *= 8;
         buffers[bid] = malloc(s);
-        
+
         printf("allocated %s at slot %zu\n", format_size_string(s), bid);
 
         uint64_t *p = buffers[bid];

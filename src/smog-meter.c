@@ -22,7 +22,7 @@
 #define PM_PRESENT (1ULL << 63)
 
 #define PM_SOFT_DIRTY (1ULL << 55)
-#define PM_ACCESSED (1ULL << 57) // using a free bit in the pte structure here
+#define PM_ACCESSED (1ULL << 57)  // using a free bit in the pte structure here
 
 #define KPF_REFERENCED (1ULL << 6)
 
@@ -175,8 +175,8 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             while (wsize < (ssize_t)idle_cache_capacity * 8) {
-                //fprintf(stderr, "/sys/kernel/mm/page_idle/bitmap: partial write %zi / %zu\n",
-                //        wsize, idle_cache_capacity * 8);
+                // fprintf(stderr, "/sys/kernel/mm/page_idle/bitmap: partial write %zi / %zu\n",
+                //         wsize, idle_cache_capacity * 8);
                 wsize -= wsize % 8;
                 ssize_t _wsize = pwrite(page_idle_fd, pfn_cache + wsize / 8,
                                         idle_cache_capacity * 8 - wsize, wsize);
@@ -309,7 +309,7 @@ int main(int argc, char* argv[]) {
                     if (pfn_word >= idle_cache_capacity) {
                         size_t new_capacity = idle_map_capacity * 64 * CHONK;
 
-                        //printf("reallocating idle_cache to %zu bytes\n", pfn_index * 8);
+                        // printf("reallocating idle_cache to %zu bytes\n", pfn_index * 8);
                         pfn_cache = realloc(pfn_cache, new_capacity * 8);
                         idle_cache = realloc(idle_cache, new_capacity * 8);
 
@@ -331,7 +331,7 @@ int main(int argc, char* argv[]) {
 
                     // read a chonk from the idle bitmap, if necessary
                     if (!(idle_map[map_word] & map_mask)) {
-                        //printf("reading %zu bytes \n", CHONK * 64 * 8);
+                        // printf("reading %zu bytes \n", CHONK * 64 * 8);
                         ssize_t rbytes = pread(page_idle_fd,
                                                idle_cache + map_bit * CHONK,
                                                CHONK * 8,
@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
 
                     // translate the idle map into an accessed bit
                     pagemap[j] &= ~(PM_ACCESSED);
-                    //printf("%#zx\n", idle_cache[pfn_index]);
+                    // printf("%#zx\n", idle_cache[pfn_index]);
                     if (!(idle_cache[pfn_word] & pfn_mask)) {
                         pagemap[j] |= PM_ACCESSED;
                     }
@@ -374,10 +374,9 @@ int main(int argc, char* argv[]) {
                     && vmas[i].committed >= arguments.min_vma_committed
                     && (!arguments.track_accessed || vmas[i].accessed >= arguments.min_vma_accessed)
                     && vmas[i].softdirty >= arguments.min_vma_dirty) {
-
                 printf("  VMA #%zu: %#zx ... %#zx %s\n",
                        i, vmas[i].start, vmas[i].end, vmas[i].pathname);
-                
+
                 double persec = vmas[i].softdirty * 1000.0 / arguments.delay;
                 printf("    - Reserved:  %zu Pages, %s\n",
                        len,
@@ -421,8 +420,9 @@ int main(int argc, char* argv[]) {
                 write8(trace_fd, &addr_start);
                 write8(trace_fd, &addr_end);
 
-                uint32_t num_pages = len;
-                write4(trace_fd, &num_pages);
+                uint32_t name_length = strlen(vmas[i].pathname) + 1;
+                write4(trace_fd, &name_length);
+                write(trace_fd, vmas[i].pathname, name_length);
 
                 uint32_t flags = 0;
                 size_t index = 0;
@@ -437,7 +437,7 @@ int main(int argc, char* argv[]) {
                     // not accessed, but given that these are caused by
                     // imprecise measurements and time drifting, it's probalby
                     // okay. still, as usual, here be dragons.
-                   
+
                     int v;
                     if (!(pagemap[j] & PM_PRESENT)) {
                         v = 0x0;
@@ -459,8 +459,6 @@ int main(int argc, char* argv[]) {
                         index = 0;
                     }
                 }
-
-                fsync(trace_fd);
             }
 
             free(pagemap);
