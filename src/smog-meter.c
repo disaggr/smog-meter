@@ -28,13 +28,15 @@
 
 #define write4(FD, BUF) do { \
     assert(sizeof(*(BUF)) == 4); \
-    write((FD), (BUF), 4); } \
-while(0)
+    ssize_t bytes = write((FD), (BUF), 4); \
+    assert(bytes == 4); \
+} while(0)
 
 #define write8(FD, BUF) do { \
     assert(sizeof(*(BUF)) == 8); \
-    write((FD), (BUF), 8); } \
-while(0)
+    ssize_t bytes = write((FD), (BUF), 8); \
+    assert(bytes == 8); \
+} while(0)
 
 // defaults
 struct arguments arguments = { 0, 0, 1000, 0, 0, 0, 0, 0, NULL };
@@ -265,7 +267,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (bytes > 0 && (size_t)bytes < len * sizeof(*pagemap)) {
-                fprintf(stderr, "%s: partial write\n", proc_pagemap);
+                fprintf(stderr, "%s: partial read\n", proc_pagemap);
                 return 1;
             }
 
@@ -422,7 +424,11 @@ int main(int argc, char* argv[]) {
 
                 uint32_t name_length = strlen(vmas[i].pathname) + 1;
                 write4(trace_fd, &name_length);
-                write(trace_fd, vmas[i].pathname, name_length);
+                ssize_t bytes = write(trace_fd, vmas[i].pathname, name_length);
+                if (bytes < name_length) {
+                    fprintf(stderr, "%s: partial write\n", arguments.tracefile);
+                    return 1;
+                }
 
                 uint32_t flags = 0;
                 size_t index = 0;
