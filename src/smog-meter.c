@@ -481,9 +481,11 @@ int main(int argc, char* argv[]) {
                format_size_string(total_softdirty * g_system_pagesize),
                arguments.delay, persec, 100.0 * total_softdirty / total_committed);
 
-        for (size_t i = 0; i < num_vmas; ++i) {
-            if (vmas[i].committed && vmas[i].softdirty >= vmas[i].committed) {
-                fprintf(stderr, "warning: VMA #%zu: maxed out dirty pages!\n", i);
+        if (arguments.verbose) {
+            for (size_t i = 0; i < num_vmas; ++i) {
+                if (vmas[i].committed && vmas[i].softdirty >= vmas[i].committed) {
+                    fprintf(stderr, "warning: VMA #%zu: maxed out dirty pages!\n", i);
+                }
             }
         }
     }
