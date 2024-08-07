@@ -12,7 +12,46 @@
 #include "./util.h"
 #include "./smog-meter.h"
 
-int update_vmas(const char *path, struct vma **buf, size_t *len) {
+static int filter_cmp(char *pattern, char *str) {
+    int n = strlen(str);
+    int m = strlen(pattern);
+
+    int i = 0, j = 0, startIndex = -1, match = 0;
+
+    while (i < n) {
+        if (j < m && (pattern[j] == '?' || pattern[j] == str[i])) {
+            // Characters match or '?' in pattern matches any character.
+            i++;
+            j++;
+        }
+        else if (j < m && pattern[j] == '*') {
+            // Wildcard character '*', mark the current position in the pattern and the text as a proper match.
+            startIndex = j;
+            match = i;
+            j++;
+        }
+        else if (startIndex != -1) {
+            // No match, but a previous wildcard was found. Backtrack to the last '*' character position and try for a different match.
+            j = startIndex + 1;
+            match++;
+            i = match;
+        }
+        else {
+            // If none of the above cases comply, the pattern does not match.
+            return -1;
+        }
+    }
+
+    // Consume any remaining '*' characters in the given pattern.
+    while (j < m && pattern[j] == '*') {
+        j++;
+    }
+
+    // If we have reached the end of both the pattern and the text, the pattern matches the text.
+    return j - m;
+}
+
+int update_vmas(const char *path, struct vma **buf, size_t *len, char *vma_filter) {
     // parse all VMAs from /proc/<pid>/maps
     struct vma *vmas = *buf;
     size_t num_vmas = *len;
@@ -63,7 +102,14 @@ int update_vmas(const char *path, struct vma **buf, size_t *len) {
             strdup(name),
         };
 
-        if (i >= num_vmas) {
+        if (!vma_filter || filter_cmp(vma_filter, vma.pathname)) {
+            if (arguments.verbose) {
+                printf("  filtered VMA: #%zu: %#zx ... %#zx (%zu Pages, %s) %s\n",
+                       i, vma.start, vma.end, vma.end - vma.start,
+                       format_size_string((vma.end - vma.start) * g_system_pagesize),
+                       vma.pathname);
+            }
+        } else if (i >= num_vmas) {
             // add to the end, probably only used in first pass
             vmas = realloc(vmas, sizeof(*vmas) * (num_vmas + 1));
             if (!vmas) {

@@ -9,11 +9,13 @@
 #include "./smog-meter.h"
 
 static const char doc[] = "A dirty page counter";
-static const char args_doc[] = "PID";
+static const char args_doc[] = "PID [VMA_NAME]";
 
 static struct argp_option options[] = {
     { "monitor-interval", 'M', "INTERVAL", 0,
       "monitor and reporting interval in milliseconds", 0 },
+    { "max-frames", 'n', "FRAMES", 0,
+      "limit the number of frames captured", 0},
     { "track-accessed", 'T', 0, 0,
       "also track the access bits for all pages (expensive)", 0},
     { "min-vma-reserved", 'r', "PAGES", 0,
@@ -41,6 +43,13 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             if (errno != 0)
                 argp_failure(state, 1, errno, "invalid interval: %s", arg);
             arguments->delay = millis;
+            break;
+        case 'n':
+            errno = 0;
+            uint64_t num_frames = strtoll(arg, NULL, 0);
+            if (errno != 0)
+                argp_failure(state, 1, errno, "invalid number of frames: %s", arg);
+            arguments->frames = num_frames;
             break;
         case 'T':
             arguments->track_accessed = 1;
@@ -81,12 +90,19 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
 
         case ARGP_KEY_ARG:
-            if (state->arg_num >= 1)
+            if (state->arg_num >= 2)
                 argp_usage(state);
-            errno = 0;
-            arguments->pid = strtoll(arg, NULL, 0);
-            if (errno != 0)
-                argp_failure(state, 1, errno, "invalid pid: %s", arg);
+            if (state->arg_num >= 1) {
+                free(arguments->vma);
+                arguments->vma = strdup(arg);
+                if (!arguments->vma)
+                    argp_failure(state, 1, errno, "unable to allocate memory");
+            } else {
+                errno = 0;
+                arguments->pid = strtoll(arg, NULL, 0);
+                if (errno != 0)
+                    argp_failure(state, 1, errno, "invalid pid: %s", arg);
+            }
             break;
 
         case ARGP_KEY_END:

@@ -39,7 +39,7 @@
 } while(0)
 
 // defaults
-struct arguments arguments = { 0, 0, 1000, 0, 0, 0, 0, 0, NULL };
+struct arguments arguments = { 0, 0, 1000, 0, 0, 0, 0, 0, 0, NULL, NULL };
 
 // globals
 size_t g_system_pagesize = 0;
@@ -159,6 +159,8 @@ int main(int argc, char* argv[]) {
     size_t idle_cache_capacity = 0;
     size_t idle_map_capacity = 0;
 
+    size_t num_frames = 0;
+
     while (1) {
         // clear all softdirty flags to initiate the measurement period
         int res = clear_softdirty(proc_clear_refs);
@@ -206,7 +208,7 @@ int main(int argc, char* argv[]) {
         }
 
         // update VMAs from /proc/<pid>/maps
-        res = update_vmas(proc_maps, &vmas, &num_vmas);
+        res = update_vmas(proc_maps, &vmas, &num_vmas, arguments.vma);
         if (res != 0) {
             fprintf(stderr, "%s: ", proc_maps);
             perror("parse_vmas");
@@ -494,6 +496,9 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+
+        if (arguments.frames && ++num_frames >= arguments.frames)
+            break;
     }
 
     close(trace_fd);

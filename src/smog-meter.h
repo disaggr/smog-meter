@@ -13,6 +13,7 @@ struct arguments {
     pid_t pid;
     int verbose;
     uint64_t delay;
+    uint64_t frames;
     int track_accessed;
 
     size_t min_vma_reserved;
@@ -21,6 +22,7 @@ struct arguments {
     size_t min_vma_dirty;
 
     char *tracefile;
+    char *vma;
 };
 
 extern struct arguments arguments;

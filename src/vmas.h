@@ -19,7 +19,7 @@ struct vma {
     char *pathname;
 };
 
-int update_vmas(const char *path, struct vma **buf, size_t *len);
+int update_vmas(const char *path, struct vma **buf, size_t *len, char *vma_filter);
 
 int clear_softdirty(const char *path);
 
