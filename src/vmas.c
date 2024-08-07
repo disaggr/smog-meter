@@ -102,7 +102,7 @@ int update_vmas(const char *path, struct vma **buf, size_t *len, char *vma_filte
             strdup(name),
         };
 
-        if (!vma_filter || filter_cmp(vma_filter, vma.pathname)) {
+        if (vma_filter && filter_cmp(vma_filter, vma.pathname)) {
             if (arguments.verbose) {
                 printf("  filtered VMA: #%zu: %#zx ... %#zx (%zu Pages, %s) %s\n",
                        i, vma.start, vma.end, vma.end - vma.start,

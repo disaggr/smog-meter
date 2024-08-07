@@ -11,6 +11,7 @@
 
 struct arguments {
     pid_t pid;
+    int self_map;
     int verbose;
     uint64_t delay;
     uint64_t frames;

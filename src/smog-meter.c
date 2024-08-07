@@ -13,6 +13,8 @@
 #include <sys/time.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 
 #include "./vmas.h"
 #include "./util.h"
@@ -39,7 +41,7 @@
 } while(0)
 
 // defaults
-struct arguments arguments = { 0, 0, 1000, 0, 0, 0, 0, 0, 0, NULL, NULL };
+struct arguments arguments = { -1, 0, 0, 1000, 0, 0, 0, 0, 0, 0, NULL, NULL };
 
 // globals
 size_t g_system_pagesize = 0;
@@ -120,6 +122,37 @@ int main(int argc, char* argv[]) {
     printf("\n");
 
     close(cmdline_fd);
+
+    int mapping_fd;
+    size_t mapping_sz;
+    void *mapping;
+    if (arguments.self_map) {
+        printf("Mapping file:             %s\n", arguments.vma);
+
+        mapping_fd = open(arguments.vma, O_RDONLY);
+        if (mapping_fd < 0) {
+            fprintf(stderr, "%s: ", arguments.vma);
+            perror("open");
+            return 1;
+        }
+
+        struct stat mapping_sb;
+        int res = fstat(mapping_fd, &mapping_sb);
+        if (res < 0) {
+            fprintf(stderr, "%s: ", arguments.vma);
+            perror("fstat");
+            return 1;
+        }
+
+        mapping_sz = mapping_sb.st_size;
+
+        mapping = mmap(NULL, mapping_sz, PROT_READ, MAP_SHARED, mapping_fd, 0);
+        if (mapping == MAP_FAILED) {
+            fprintf(stderr, "%s: ", arguments.vma);
+            perror("mmap");
+            return 1;
+        }
+    }
 
     int pagemap_fd = open(proc_pagemap, O_RDONLY);
     if (pagemap_fd < 0) {

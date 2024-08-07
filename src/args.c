@@ -5,6 +5,7 @@
 #include <argp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "./smog-meter.h"
 
@@ -98,16 +99,25 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
                 if (!arguments->vma)
                     argp_failure(state, 1, errno, "unable to allocate memory");
             } else {
-                errno = 0;
-                arguments->pid = strtoll(arg, NULL, 0);
-                if (errno != 0)
-                    argp_failure(state, 1, errno, "invalid pid: %s", arg);
+                if (!strcmp(arg, "self")) {
+                    arguments->pid = getpid();
+                    arguments->self_map = 1;
+                } else {
+                    errno = 0;
+                    arguments->pid = strtoll(arg, NULL, 0);
+                    if (errno != 0)
+                        argp_failure(state, 1, errno, "invalid pid: %s", arg);
+                }
             }
             break;
 
         case ARGP_KEY_END:
             if (state->arg_num < 1)
                 argp_usage(state);
+
+            if (arguments->self_map && !arguments->vma)
+                argp_failure(state, 1, 0, "PID of self requires a VMA_NAME parameter to be set.");
+
             break;
 
         default:
