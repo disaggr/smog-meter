@@ -17,8 +17,10 @@ static struct argp_option options[] = {
       "monitor and reporting interval in milliseconds", 0 },
     { "max-frames", 'n', "FRAMES", 0,
       "limit the number of frames captured", 0},
+    { "track-softdirty", 'D', 0, 0,
+      "track the softdirty bits for all pages", 0},
     { "track-accessed", 'T', 0, 0,
-      "also track the access bits for all pages (expensive)", 0},
+      "track the access bits for all pages (expensive)", 0},
     { "min-vma-reserved", 'r', "PAGES", 0,
       "the minimum reserved pages of a VMA to be reported", 1 },
     { "min-vma-committed", 'c', "PAGES", 0,
@@ -54,6 +56,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
         case 'T':
             arguments->track_accessed = 1;
+            break;
+        case 'D':
+            arguments->track_softdirty = 1;
             break;
         case 'r':
             errno = 0;

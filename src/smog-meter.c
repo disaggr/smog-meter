@@ -41,7 +41,7 @@
 } while(0)
 
 // defaults
-struct arguments arguments = { -1, 0, 0, 1000, 0, 0, 0, 0, 0, 0, NULL, NULL };
+struct arguments arguments = { -1, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 0, NULL, NULL };
 
 // globals
 size_t g_system_pagesize = 0;
@@ -161,14 +161,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    int page_idle_fd = -1;
-    if (arguments.track_accessed) {
-        page_idle_fd = open("/sys/kernel/mm/page_idle/bitmap", O_RDWR);
-        if (page_idle_fd < 0) {
-            fprintf(stderr, "/sys/kernel/mm/page_idle/bitmap: ");
-            perror("open");
-            return 1;
-        }
+    int page_idle_fd = open("/sys/kernel/mm/page_idle/bitmap", O_RDWR);
+    if (page_idle_fd < 0) {
+        fprintf(stderr, "/sys/kernel/mm/page_idle/bitmap: ");
+        perror("open");
+        return 1;
     }
 
     // the sampling interval
@@ -196,11 +193,13 @@ int main(int argc, char* argv[]) {
 
     while (1) {
         // clear all softdirty flags to initiate the measurement period
-        int res = clear_softdirty(proc_clear_refs);
-        if (res != 0) {
-            fprintf(stderr, "%s: ", proc_clear_refs);
-            perror("clear_softdirty");
-            return res;
+        if (arguments.track_softdirty) {
+            int res = clear_softdirty(proc_clear_refs);
+            if (res != 0) {
+                fprintf(stderr, "%s: ", proc_clear_refs);
+                perror("clear_softdirty");
+                return res;
+            }
         }
 
         // clear all tracked accessed bits
@@ -393,6 +392,10 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
+                if (!arguments.track_softdirty) {
+                    pagemap[j] &= ~(PM_SOFT_DIRTY);
+                }
+
                 if (pagemap[j] & PM_ACCESSED) {
                     vmas[i].accessed++;
                 }
@@ -426,10 +429,12 @@ int main(int argc, char* argv[]) {
                            vmas[i].accessed,
                            format_size_string(vmas[i].accessed * g_system_pagesize));
                 }
-                printf("    - Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
-                       vmas[i].softdirty,
-                       format_size_string(vmas[i].softdirty * g_system_pagesize),
-                       arguments.delay, persec, 100.0 * vmas[i].softdirty / vmas[i].committed);
+                if (arguments.track_softdirty) {
+                    printf("    - Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
+                           vmas[i].softdirty,
+                           format_size_string(vmas[i].softdirty * g_system_pagesize),
+                           arguments.delay, persec, 100.0 * vmas[i].softdirty / vmas[i].committed);
+                }
 
                 if (arguments.verbose >= 2) {
                     for (size_t j = 0; j < (size_t)len; ++j) {
@@ -441,7 +446,7 @@ int main(int argc, char* argv[]) {
                         } else if (arguments.track_accessed && !(pagemap[j] & PM_ACCESSED)
                                    && (pagemap[j] & PM_SOFT_DIRTY)) {
                             printf("\e[0;33m#\e[0m");
-                        } else if (pagemap[j] & PM_SOFT_DIRTY) {
+                        } else if (arguments.track_softdirty && (pagemap[j] & PM_SOFT_DIRTY)) {
                             printf("\e[0;31m#\e[0m");
                         } else {
                             printf("#");
@@ -517,10 +522,12 @@ int main(int argc, char* argv[]) {
                    total_accessed,
                    format_size_string(total_accessed * g_system_pagesize));
         }
-        printf("Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
-               total_softdirty,
-               format_size_string(total_softdirty * g_system_pagesize),
-               arguments.delay, persec, 100.0 * total_softdirty / total_committed);
+        if (arguments.track_softdirty) {
+            printf("Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
+                   total_softdirty,
+                   format_size_string(total_softdirty * g_system_pagesize),
+                   arguments.delay, persec, 100.0 * total_softdirty / total_committed);
+        }
 
         if (arguments.verbose) {
             for (size_t i = 0; i < num_vmas; ++i) {

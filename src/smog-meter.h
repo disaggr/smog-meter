@@ -16,6 +16,7 @@ struct arguments {
     uint64_t delay;
     uint64_t frames;
     int track_accessed;
+    int track_softdirty;
 
     size_t min_vma_reserved;
     size_t min_vma_committed;
