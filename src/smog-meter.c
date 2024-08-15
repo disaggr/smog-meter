@@ -168,9 +168,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // the sampling interval
-    struct timespec delay = TIMESPEC_FROM_MILLIS(arguments.delay);
-
     // parse the smaps to warn about hugepages
     res = parse_smaps(proc_smaps);
     if (res != 0) {
@@ -190,6 +187,11 @@ int main(int argc, char* argv[]) {
     size_t idle_map_capacity = 0;
 
     size_t num_frames = 0;
+
+    struct timeval now;
+    struct timeval prev;
+    gettimeofday(&prev, NULL);
+    struct timeval delay = TIMEVAL_FROM_MILLIS(arguments.delay);
 
     while (1) {
         // clear all softdirty flags to initiate the measurement period
@@ -232,12 +234,40 @@ int main(int argc, char* argv[]) {
             memset(idle_map, 0, idle_map_capacity * 8);
         }
 
-        // delay
-        res = nanosleep(&delay, NULL);
-        if (res != 0) {
-            perror("nanosleep");
-            return res;
+        // the sampling interval
+        gettimeofday(&now, NULL);
+
+        // determine elapsed time
+        struct timeval elapsed;
+        timersub(&now, &prev, &elapsed);
+
+        // if less time elapsed than the configured delay, sleep the remainder
+        if (timercmp(&elapsed, &delay, <)) {
+            struct timeval remaining;
+            timersub(&delay, &elapsed, &remaining);
+
+            //if (arguments.verbose) {
+                printf("+++%zu ms elapsed of %zu ms configured delay. sleeping %zu ms\n", elapsed.tv_sec * 1000 + elapsed.tv_usec / 1000, arguments.delay, remaining.tv_sec * 1000 + remaining.tv_usec / 1000);
+            //}
+
+            struct timespec delay_ts = TIMEVAL_TO_TIMESPEC(remaining);
+
+            res = nanosleep(&delay_ts, NULL);
+            if (res != 0) {
+                perror("nanosleep");
+                return res;
+            }
+        } else {
+            //if (arguments.verbose) {
+                printf("+++%zu ms elapsed of %zu ms configured delay. no need to sleep\n", elapsed.tv_sec * 1000 + elapsed.tv_usec / 1000, arguments.delay);
+            //}
         }
+
+        gettimeofday(&now, NULL);
+        timersub(&now, &prev, &elapsed);
+
+        size_t elapsed_ms = elapsed.tv_sec * 1000 + elapsed.tv_usec / 1000;
+        prev = now;
 
         // update VMAs from /proc/<pid>/maps
         res = update_vmas(proc_maps, &vmas, &num_vmas, arguments.vma);
@@ -247,16 +277,13 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        struct tm *ti = localtime(&tv.tv_sec);
-
+        struct tm *ti = localtime(&now.tv_sec);
         char time_buf[64] = { 0 };
         strftime(time_buf, 64, "%F_%T", ti);
 
         if (arguments.tracefile) {
-            uint32_t sec = tv.tv_sec;
-            uint32_t usec = tv.tv_usec;
+            uint32_t sec = now.tv_sec;
+            uint32_t usec = now.tv_usec;
             write4(trace_fd, &sec);
             write4(trace_fd, &usec);
 
@@ -267,10 +294,10 @@ int main(int argc, char* argv[]) {
         if (arguments.verbose) {
             printf("\n");
             printf("%s.%06lu - Parsed %zu VMAs from %s:\n",
-                   time_buf, tv.tv_usec, num_vmas, proc_maps);
+                   time_buf, now.tv_usec, num_vmas, proc_maps);
         } else {
             printf("%s.%06lu - Parsed %zu VMAs from %s\n",
-                   time_buf, tv.tv_usec, num_vmas, proc_maps);
+                   time_buf, now.tv_usec, num_vmas, proc_maps);
         }
 
         // walk pagemap for the aggregated regions
@@ -417,7 +444,7 @@ int main(int argc, char* argv[]) {
                 printf("  VMA #%zu: %#zx ... %#zx %s\n",
                        i, vmas[i].start, vmas[i].end, vmas[i].pathname);
 
-                double persec = vmas[i].softdirty * 1000.0 / arguments.delay;
+                double persec = vmas[i].softdirty * 1000.0 / elapsed_ms;
                 printf("    - Reserved:  %zu Pages, %s\n",
                        len,
                        format_size_string(len * g_system_pagesize));
@@ -433,7 +460,7 @@ int main(int argc, char* argv[]) {
                     printf("    - Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
                            vmas[i].softdirty,
                            format_size_string(vmas[i].softdirty * g_system_pagesize),
-                           arguments.delay, persec, 100.0 * vmas[i].softdirty / vmas[i].committed);
+                           elapsed_ms, persec, 100.0 * vmas[i].softdirty / vmas[i].committed);
                 }
 
                 if (arguments.verbose >= 2) {
@@ -510,7 +537,7 @@ int main(int argc, char* argv[]) {
             free(pagemap);
         }
 
-        double persec = total_softdirty * 1000.0 / arguments.delay;
+        double persec = total_softdirty * 1000.0 / elapsed_ms;
         printf("Reserved:  %zu Pages, %s\n",
                total_reserved,
                format_size_string(total_reserved * g_system_pagesize));
@@ -526,7 +553,7 @@ int main(int argc, char* argv[]) {
             printf("Softdirty: %zu Pages, %s in %zu ms (%.0f/s; %.2f%%)\n",
                    total_softdirty,
                    format_size_string(total_softdirty * g_system_pagesize),
-                   arguments.delay, persec, 100.0 * total_softdirty / total_committed);
+                   elapsed_ms, persec, 100.0 * total_softdirty / total_committed);
         }
 
         if (arguments.verbose) {

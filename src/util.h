@@ -13,6 +13,10 @@ char *makestr(const char *format, ...);
 
 int parse_smaps(const char *path);
 
+#define TIMEVAL_FROM_MILLIS(M) { (M) / 1000, ((M) % 1000) * 1000 }
+
 #define TIMESPEC_FROM_MILLIS(M) { (M) / 1000, ((M) % 1000) * 1000000 }
+
+#define TIMEVAL_TO_TIMESPEC(TV) { (TV).tv_sec, (TV).tv_usec * 1000 }
 
 #endif  // UTIL_H_
