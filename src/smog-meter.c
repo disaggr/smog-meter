@@ -532,6 +532,12 @@ int main(int argc, char* argv[]) {
                         index = 0;
                     }
                 }
+
+                int res = fsync(trace_fd);
+                if (res != 0) {
+                    fprintf(stderr, "%s: ", arguments.tracefile);
+                    perror("fsync");
+                }
             }
 
             free(pagemap);
